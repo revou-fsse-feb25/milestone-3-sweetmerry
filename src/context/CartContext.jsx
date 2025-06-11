@@ -1,55 +1,66 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 
 const CartContext = createContext();
 
 export function CartProvider({ children }) {
+  const { data: session } = useSession();
   const [cart, setCart] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
 
+  // Load cart data when user session changes
   useEffect(() => {
-    // Load cart from localStorage on initial load
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      setCart(JSON.parse(savedCart));
+    if (session?.user) {
+      // In a real app, you would fetch the user's cart from your backend
+      const savedCart = localStorage.getItem(`cart_${session.user.id}`);
+      if (savedCart) {
+        setCart(JSON.parse(savedCart));
+      }
+    } else {
+      // For non-authenticated users, use a temporary cart
+      const tempCart = localStorage.getItem('temp_cart');
+      if (tempCart) {
+        setCart(JSON.parse(tempCart));
+      }
     }
-  }, []);
+    setLoading(false);
+  }, [session]);
 
+  // Save cart data when it changes
   useEffect(() => {
-    // Save cart to localStorage whenever it changes
-    localStorage.setItem('cart', JSON.stringify(cart));
-    
-    // Calculate total
-    const newTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    setTotal(newTotal);
-  }, [cart]);
+    if (!loading) {
+      if (session?.user) {
+        localStorage.setItem(`cart_${session.user.id}`, JSON.stringify(cart));
+      } else {
+        localStorage.setItem('temp_cart', JSON.stringify(cart));
+      }
+    }
+  }, [cart, session, loading]);
 
   const addToCart = (product) => {
-    setCart(currentCart => {
-      const existingItem = currentCart.find(item => item.id === product.id);
-      
+    setCart(prevCart => {
+      const existingItem = prevCart.find(item => item.id === product.id);
       if (existingItem) {
-        return currentCart.map(item =>
+        return prevCart.map(item =>
           item.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
-      
-      return [...currentCart, { ...product, quantity: 1 }];
+      return [...prevCart, { ...product, quantity: 1 }];
     });
   };
 
   const removeFromCart = (productId) => {
-    setCart(currentCart => currentCart.filter(item => item.id !== productId));
+    setCart(prevCart => prevCart.filter(item => item.id !== productId));
   };
 
   const updateQuantity = (productId, quantity) => {
     if (quantity < 1) return;
-    
-    setCart(currentCart =>
-      currentCart.map(item =>
+    setCart(prevCart =>
+      prevCart.map(item =>
         item.id === productId
           ? { ...item, quantity }
           : item
@@ -61,15 +72,27 @@ export function CartProvider({ children }) {
     setCart([]);
   };
 
+  const getCartTotal = () => {
+    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+
+  const getCartCount = () => {
+    return cart.reduce((count, item) => count + item.quantity, 0);
+  };
+
   return (
-    <CartContext.Provider value={{
-      cart,
-      total,
-      addToCart,
-      removeFromCart,
-      updateQuantity,
-      clearCart,
-    }}>
+    <CartContext.Provider
+      value={{
+        cart,
+        loading,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        getCartTotal,
+        getCartCount,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );

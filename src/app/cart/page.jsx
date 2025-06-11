@@ -1,13 +1,44 @@
 'use client';
 
 import { useCart } from '@/context/CartContext';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function CartPage() {
-  const { cart, total, removeFromCart, updateQuantity } = useCart();
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const { 
+    cart, 
+    loading, 
+    removeFromCart, 
+    updateQuantity, 
+    getCartTotal 
+  } = useCart();
 
-  if (cart.length === 0) {
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
+
+  if (status === 'loading' || loading) {
+    return (
+      <main className="container-custom py-12">
+        <div className="text-center">
+          <p>Loading...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return null;
+  }
+
+  if (!cart || cart.length === 0) {
     return (
       <main className="container-custom py-12">
         <div className="text-center">
@@ -20,6 +51,8 @@ export default function CartPage() {
       </main>
     );
   }
+
+  const total = getCartTotal();
 
   return (
     <main className="container-custom py-12">
@@ -35,6 +68,7 @@ export default function CartPage() {
                   alt={item.title}
                   fill
                   className="object-contain"
+                  sizes="(max-width: 768px) 100vw, 50vw"
                 />
               </div>
               
@@ -47,6 +81,7 @@ export default function CartPage() {
                     <button
                       onClick={() => updateQuantity(item.id, item.quantity - 1)}
                       className="px-3 py-1 hover:bg-gray-100"
+                      disabled={item.quantity <= 1}
                     >
                       -
                     </button>
@@ -92,7 +127,7 @@ export default function CartPage() {
           </div>
           
           <button
-            onClick={() => alert('Checkout functionality coming soon!')}
+            onClick={() => router.push('/checkout')}
             className="btn btn-primary w-full"
           >
             Proceed to Checkout
